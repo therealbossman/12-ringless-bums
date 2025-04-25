@@ -52,7 +52,7 @@
             const rankings = rosters.map(roster => {
                 let totalValue = 0;
                 (roster.players || []).forEach(playerId => {
-                    const playerName = playerId;
+                    const playerName = playerId; // Assuming the player name here (would use player ID lookup for a real system)
                     if (ktcValues[playerName]) {
                         totalValue += ktcValues[playerName];
                     }
