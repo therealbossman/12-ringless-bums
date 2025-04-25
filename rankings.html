@@ -1,115 +1,118 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>11 Ringless Bums - Power Rankings</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>11 Ringless Bums – Power Rankings</title>
+  <style>
+    body { background:#000; color:#fff; font-family:Arial,sans-serif; text-align:center; padding:1rem; }
+    .toggle-container { margin:1rem 0; }
+    .toggle-btn { margin:0 .5rem; padding:.5rem 1rem; background:#222; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+    .toggle-btn.active { border:2px solid gold; }
+    .team-card { background:rgba(255,255,255,.05); margin:1rem auto; padding:1rem; max-width:400px; border-radius:8px; }
+    .team-rank { font-size:1.2rem; }
+    .team-owner { font-weight:bold; }
+    .team-value { margin-top:.5rem; }
+  </style>
 </head>
 <body>
-    <h1>11 Ringless Bums</h1>
+  <h1>11 Ringless Bums</h1>
+  <div class="toggle-container">
+    <button id="playersOnlyBtn" class="toggle-btn active">Players Only</button>
+    <button id="playersAndPicksBtn" class="toggle-btn">Players + Picks</button>
+  </div>
+  <div id="rankings">Loading…</div>
 
-    <div class="toggle-container">
-        <button id="playersOnlyBtn" class="toggle-btn active">Players Only</button>
-        <button id="playersAndPicksBtn" class="toggle-btn">Players + Picks</button>
-    </div>
+  <script>
+  const leagueId = '1182477393715769344';
 
-    <div id="rankings">Loading rankings...</div>
+  // 1) Fetch KTC values (hard-coded or from a hosted JSON)
+  async function fetchKTC() {
+    return {
+      "Patrick Mahomes":9200,
+      "Malik Nabers":6500,
+      "Sam LaPorta":6000,
+      "2025 1st":5800,
+      "2025 2nd":1400,
+      "2026 1st":5500
+      // …add all your pick values here
+    };
+  }
 
-    <script>
-        async function fetchKTCValues() {
-            return {
-                "Patrick Mahomes": 9200,
-                "Malik Nabers": 6500,
-                "Sam LaPorta": 6000,
-                "2025 1st": 5800,
-                "2025 2nd": 1400,
-                "2026 1st": 5500
-            };
-        }
+  // 2) Fetch Sleeper users & rosters
+  async function fetchLeague() {
+    const [u, r] = await Promise.all([
+      fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`).then(x=>x.json()),
+      fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`).then(x=>x.json())
+    ]);
+    const userMap = {}; u.forEach(u=>userMap[u.user_id]=u.display_name);
+    return { userMap, rosters: r };
+  }
 
-        async function fetchSleeperLeagueData() {
-            const leagueId = "1182477393715769344";
-            const usersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`);
-            const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`);
+  // 3) Fetch all NFL player names by their ID
+  async function fetchPlayerNames() {
+    const resp = await fetch('https://api.sleeper.app/v1/players/nfl');
+    return await resp.json(); // returns { player_id: {full_name: "...", ...}, ... }
+  }
 
-            const users = await usersResponse.json();
-            const rosters = await rostersResponse.json();
+  // 4) Build rankings
+  async function buildRankings(includePicks) {
+    const [ktc, {userMap, rosters}, playersData] = await Promise.all([
+      fetchKTC(), fetchLeague(), fetchPlayerNames()
+    ]);
 
-            const userMap = {};
-            users.forEach(user => {
-                userMap[user.user_id] = user.display_name;
-            });
-
-            return { users: userMap, rosters };
-        }
-
-        async function buildRankings(includePicks) {
-            const ktcValues = await fetchKTCValues();
-            const { users, rosters } = await fetchSleeperLeagueData();
-
-            const rankings = rosters.map(roster => {
-                let totalValue = 0;
-                (roster.players || []).forEach(playerId => {
-                    const playerName = playerId; // Assuming the player name here (would use player ID lookup for a real system)
-                    if (ktcValues[playerName]) {
-                        totalValue += ktcValues[playerName];
-                    }
-                });
-
-                if (includePicks && roster.metadata && roster.metadata.picks) {
-                    roster.metadata.picks.forEach(pick => {
-                        if (ktcValues[pick]) {
-                            totalValue += ktcValues[pick];
-                        }
-                    });
-                }
-
-                return {
-                    owner: users[roster.owner_id] || "Unknown Owner",
-                    value: totalValue
-                };
-            });
-
-            rankings.sort((a, b) => b.value - a.value);
-            return rankings;
-        }
-
-        function renderRankings(rankings) {
-            const rankingsDiv = document.getElementById('rankings');
-            rankingsDiv.innerHTML = '';
-
-            rankings.forEach((team, index) => {
-                const div = document.createElement('div');
-                div.className = 'team-card';
-                div.innerHTML = `
-                    <div class="team-rank">#${index + 1} ${index === 0 ? '🏆' : index === 1 ? '🥈' : index === 2 ? '🥉' : ''}</div>
-                    <div class="team-owner">${team.owner}</div>
-                    <div class="team-value">Total Value: ${team.value}</div>
-                `;
-                rankingsDiv.appendChild(div);
-            });
-        }
-
-        async function init(includePicks) {
-            const rankings = await buildRankings(includePicks);
-            renderRankings(rankings);
-        }
-
-        document.getElementById('playersOnlyBtn').addEventListener('click', () => {
-            document.getElementById('playersOnlyBtn').classList.add('active');
-            document.getElementById('playersAndPicksBtn').classList.remove('active');
-            init(false);
+    return rosters.map(roster => {
+      let total = 0;
+      // Sum player values
+      (roster.players||[]).forEach(pid => {
+        const name = playersData[pid]?.full_name;
+        if (name && ktc[name]) total += ktc[name];
+      });
+      // Sum draft pick values
+      if (includePicks && roster.metadata?.picks) {
+        roster.metadata.picks.forEach(p => {
+          if (ktc[p]) total += ktc[p];
         });
+      }
+      return { owner: userMap[roster.owner_id]||'Unknown', total };
+    })
+    .sort((a,b)=>b.total-a.total);
+  }
 
-        document.getElementById('playersAndPicksBtn').addEventListener('click', () => {
-            document.getElementById('playersOnlyBtn').classList.remove('active');
-            document.getElementById('playersAndPicksBtn').classList.add('active');
-            init(true);
-        });
+  // 5) Render
+  function render(list) {
+    const out = document.getElementById('rankings');
+    out.innerHTML = '';
+    list.forEach((t,i) => {
+      const card = document.createElement('div');
+      card.className = 'team-card';
+      card.innerHTML = `
+        <div class="team-rank">#${i+1} ${i<3? ['🏆','🥈','🥉'][i] : ''}</div>
+        <div class="team-owner">${t.owner}</div>
+        <div class="team-value">Total: ${t.total.toLocaleString()} pts</div>
+      `;
+      out.appendChild(card);
+    });
+  }
 
-        init(false);
-    </script>
+  // 6) Init & toggle logic
+  async function init(includePicks=false) {
+    document.getElementById('rankings').innerText = 'Loading…';
+    const data = await buildRankings(includePicks);
+    render(data);
+  }
+
+  document.getElementById('playersOnlyBtn').onclick = () => {
+    playersOnlyBtn.classList.add('active'); playersAndPicksBtn.classList.remove('active');
+    init(false);
+  };
+  document.getElementById('playersAndPicksBtn').onclick = () => {
+    playersOnlyBtn.classList.remove('active'); playersAndPicksBtn.classList.add('active');
+    init(true);
+  };
+
+  // default load
+  init();
+  </script>
 </body>
 </html>
