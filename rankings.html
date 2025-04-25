@@ -2,89 +2,81 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>11 Ringless Bums - Power Rankings</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-            background-color: #ffffff;
-            color: #000000;
-        }
-        h1 {
-            margin-top: 30px;
-            font-size: 36px;
-        }
-        #rankings {
-            margin-top: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .team {
-            margin: 10px;
-            padding: 10px 20px;
-            border: 1px solid #ccc;
-            border-radius: 10px;
-            width: 90%;
-            max-width: 500px;
-            background-color: #f9f9f9;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Power Rankings</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <h1>11 Ringless Bums - Power Rankings</h1>
+  <div class="toggle-container">
+    <button id="playersOnlyBtn" class="toggle-btn active">Players Only</button>
+    <button id="playersAndPicksBtn" class="toggle-btn">Players + Picks</button>
+  </div>
+  <div id="rankings">Loading rankings...</div>
 
-    <h1>11 Ringless Bums</h1>
-    <div id="rankings">Loading rankings...</div>
+  <script>
+    const leagueId = "1182477393715769344";
 
-    <script>
-        async function getRankings() {
-            const leagueId = "1182477393715769344";
-            try {
-                const usersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`);
-                const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`);
+    async function fetchData() {
+      try {
+        const usersRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`);
+        const rostersRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`);
+        const users = await usersRes.json();
+        const rosters = await rostersRes.json();
 
-                const users = await usersResponse.json();
-                const rosters = await rostersResponse.json();
+        const userMap = {};
+        users.forEach(user => {
+          userMap[user.user_id] = user.display_name;
+        });
 
-                const userMap = {};
-                users.forEach(user => {
-                    userMap[user.user_id] = user.display_name;
-                });
+        const rankings = rosters.map(roster => {
+          const ownerName = userMap[roster.owner_id] || "Unknown Owner";
+          const playersCount = roster.players ? roster.players.length : 0;
+          const draftPickBonus = roster.metadata && roster.metadata.settings ? 3 : 0;
+          return {
+            ownerName,
+            playersCount,
+            totalScore: playersCount * 100 + draftPickBonus * 50 // Dummy logic for demo
+          };
+        });
 
-                const rankings = rosters.map(roster => {
-                    const teamName = (roster.metadata && roster.metadata.team_name) || null;
-                    const ownerName = userMap[roster.owner_id] || "Unknown";
-                    const playersCount = roster.players ? roster.players.length : 0;
-                    return {
-                        teamName,
-                        ownerName,
-                        playersCount
-                    };
-                });
+        return rankings.sort((a, b) => b.totalScore - a.totalScore);
+      } catch (err) {
+        console.error(err);
+        return [];
+      }
+    }
 
-                rankings.sort((a, b) => b.playersCount - a.playersCount);
+    function renderRankings(rankings, includePicks) {
+      const rankingsDiv = document.getElementById('rankings');
+      rankingsDiv.innerHTML = '';
+      rankings.forEach((team, idx) => {
+        const div = document.createElement('div');
+        div.className = 'team';
+        div.innerHTML = `<strong>#${idx + 1}</strong> ${team.ownerName} - ${includePicks ? (team.totalScore + 200) : team.totalScore} pts`;
+        rankingsDiv.appendChild(div);
+      });
+    }
 
-                const rankingsDiv = document.getElementById('rankings');
-                rankingsDiv.innerHTML = '';
+    async function init() {
+      const rankings = await fetchData();
+      renderRankings(rankings, false);
 
-                rankings.forEach((team, index) => {
-                    const div = document.createElement('div');
-                    div.className = 'team';
-                    div.innerHTML = `<strong>#${index + 1}</strong> ${team.ownerName}`;
-                    rankingsDiv.appendChild(div);
-                });
-            } catch (error) {
-                document.getElementById('rankings').innerText = "Error loading rankings.";
-                console.error("Ranking load error:", error);
-            }
-        }
+      document.getElementById('playersOnlyBtn').onclick = () => {
+        renderRankings(rankings, false);
+        document.getElementById('playersOnlyBtn').classList.add('active');
+        document.getElementById('playersAndPicksBtn').classList.remove('active');
+      };
 
-        getRankings();
-    </script>
+      document.getElementById('playersAndPicksBtn').onclick = () => {
+        renderRankings(rankings, true);
+        document.getElementById('playersOnlyBtn').classList.remove('active');
+        document.getElementById('playersAndPicksBtn').classList.add('active');
+      };
+    }
 
+    init();
+  </script>
 </body>
 </html>
