@@ -57,7 +57,8 @@
 
             // Create team rankings based on roster size (basic for now)
             const rankings = rosters.map(roster => {
-                const teamName = roster.metadata.team_name || "Unnamed Team";
+                const metadata = roster.metadata || {};
+                const teamName = metadata.team_name ? metadata.team_name : "Unnamed Team";
                 const ownerName = userMap[roster.owner_id] || "Unknown";
                 const playersCount = roster.players ? roster.players.length : 0;
                 return {
